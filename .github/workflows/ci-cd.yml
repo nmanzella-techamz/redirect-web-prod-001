@@ -1,0 +1,76 @@
+name: Docker Image CICD
+run-name: "${{ github.event.head_commit.message }} (${{ github.sha }})"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  docker-check-health:
+    name: Docker health check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create Docker network
+      run: docker network create -d bridge traefik-network
+      env:
+        DOMAIN_NAME: localhost
+        NTFY_SH_TOPIC: does-not-exist
+        REDIRECT_URL: https://www.google.com
+
+    - name: Build the Docker image
+      run: docker compose up --detach --wait --wait-timeout 30
+
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: docker-check-health
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Tailscale connection
+      uses: tailscale/github-action@v2
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:cicd-pipeline
+
+    - name: SSH setup
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$SSH_FINGERPRINT" > ~/.ssh/known_hosts
+        echo "$SSH_KEY" > ~/.ssh/srv.key
+        chmod 600 ~/.ssh/srv.key
+        cat >>~/.ssh/config <<END
+        Host srv
+          HostName $SSH_HOST
+          User $SSH_USER
+          IdentityFile ~/.ssh/srv.key
+          StrictHostKeyChecking yes
+        END
+      env:
+        SSH_USER: ${{ secrets.USERNAME }}
+        SSH_KEY: ${{ secrets.SSH_PRIV_KEY }}
+        SSH_HOST: ${{ secrets.TS_SERVER_IP }}
+        SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+
+    - name: Bring down container on server
+      run: ssh srv 'if [ -f ${{ github.event.repository.name }}/compose.yaml ]; then cd ${{ github.event.repository.name }} && docker compose down; fi '
+
+    - name: Delete directory on server
+      continue-on-error: true
+      run: ssh srv 'rm -rf ${{ github.event.repository.name }}'
+
+    - name: Deploy files
+      run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
+
+    - name: Create Docker network if it does not exist
+      run: ssh srv 'if docker network ls --format "{{.Name}}" | grep -q traefik-network; then echo "Network already exists"; else docker network create traefik-network;fi'
+
+    - name: Always bring up container on server
+      if: ${{ always() }}
+      run: ssh srv 'cd ${{ github.event.repository.name }} && docker compose up -d'

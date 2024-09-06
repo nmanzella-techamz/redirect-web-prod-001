@@ -1,0 +1,22 @@
+services:
+
+  link-click-notification:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: link-click-notification # Custom, built with Dockerfile
+    container_name: "link-click-notification"
+    environment:
+      - NTFY_SH_TOPIC=${NTFY_SH_TOPIC}
+      - REDIRECT_URL=${REDIRECT_URL}
+    networks:
+      - traefik-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.link-click-notification.rule=Host(`redirect.${DOMAIN_NAME}`)
+      - traefik.http.routers.link-click-notification.entrypoints=websecure
+      - traefik.http.routers.link-click-notification.tls.certresolver=letsencrypt
+  
+networks:
+  traefik-network:
+    external: true
