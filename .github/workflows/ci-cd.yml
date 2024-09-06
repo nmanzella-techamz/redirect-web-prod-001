@@ -57,8 +57,6 @@ jobs:
         SSH_KEY: ${{ secrets.SSH_PRIV_KEY }}
         SSH_HOST: ${{ secrets.TS_SERVER_IP }}
         SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-        NTFY_SH_TOPIC: ${{ secrets.NTFY_SH_TOPIC }}
-        REDIRECT_URL: ${{ secrets.REDIRECT_URL }}
 
     - name: Bring down container on server
       run: ssh srv 'if [ -f ${{ github.event.repository.name }}/compose.yaml ]; then cd ${{ github.event.repository.name }} && docker compose down; fi '
@@ -66,9 +64,6 @@ jobs:
     - name: Delete directory on server
       continue-on-error: true
       run: ssh srv 'rm -rf ${{ github.event.repository.name }}'
-
-    - name: Set environment variables
-      run: ssh srv 'export NTFY_SH_TOPIC=$NTFY_SH_TOPIC && export REDIRECT_URL=$REDIRECT_URL'
 
     - name: Deploy files
       run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
@@ -81,4 +76,4 @@ jobs:
 
     - name: Always bring up container on server
       if: ${{ always() }}
-      run: ssh srv 'cd ${{ github.event.repository.name }} && docker compose up -d'
+      run: ssh srv 'export NTFY_SH_TOPIC=${{ secrets.NTFY_SH_TOPIC }} && export REDIRECT_URL=${{ secrets.REDIRECT_URL }} && cd ${{ github.event.repository.name }} && docker compose up -d'
