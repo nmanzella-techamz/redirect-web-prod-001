@@ -51,12 +51,16 @@ jobs:
           User $SSH_USER
           IdentityFile ~/.ssh/srv.key
           StrictHostKeyChecking yes
+          SetEnv NTFY_SH_TOPIC=$NTFY_SH_TOPIC
+          SetEnv REDIRECT_URL=$REDIRECT_URL
         END
       env:
         SSH_USER: ${{ secrets.USERNAME }}
         SSH_KEY: ${{ secrets.SSH_PRIV_KEY }}
         SSH_HOST: ${{ secrets.TS_SERVER_IP }}
         SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+        NTFY_SH_TOPIC: ${{ secrets.NTFY_SH_TOPIC }}
+        REDIRECT_URL: ${{ secrets.REDIRECT_URL }}
 
     - name: Bring down container on server
       run: ssh srv 'if [ -f ${{ github.event.repository.name }}/compose.yaml ]; then cd ${{ github.event.repository.name }} && docker compose down; fi '
@@ -67,6 +71,9 @@ jobs:
 
     - name: Deploy files
       run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
+
+    - name: Remove old Docker image
+      run: ssh srv 'docker image rm link-click-notification'
 
     - name: Create Docker network if it does not exist
       run: ssh srv 'if docker network ls --format "{{.Name}}" | grep -q traefik-network; then echo "Network already exists"; else docker network create traefik-network;fi'
