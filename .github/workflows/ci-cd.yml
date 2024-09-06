@@ -51,8 +51,6 @@ jobs:
           User $SSH_USER
           IdentityFile ~/.ssh/srv.key
           StrictHostKeyChecking yes
-          SetEnv NTFY_SH_TOPIC=$NTFY_SH_TOPIC
-          SetEnv REDIRECT_URL=$REDIRECT_URL
         END
       env:
         SSH_USER: ${{ secrets.USERNAME }}
@@ -68,6 +66,9 @@ jobs:
     - name: Delete directory on server
       continue-on-error: true
       run: ssh srv 'rm -rf ${{ github.event.repository.name }}'
+
+    - name: Set environment variables
+      run: ssh srv 'export NTFY_SH_TOPIC=$NTFY_SH_TOPIC && export REDIRECT_URL=$REDIRECT_URL'
 
     - name: Deploy files
       run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
