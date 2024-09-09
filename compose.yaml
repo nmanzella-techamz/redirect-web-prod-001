@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     image: link-click-notification # Custom, built with Dockerfile
     container_name: "link-click-notification"
+    restart: always
     environment:
       - NTFY_SH_TOPIC=${NTFY_SH_TOPIC}
       - REDIRECT_URL=${REDIRECT_URL}
