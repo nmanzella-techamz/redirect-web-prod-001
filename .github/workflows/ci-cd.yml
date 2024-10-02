@@ -59,21 +59,45 @@ jobs:
         SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
 
     - name: Bring down container on server
-      run: ssh srv 'if [ -f ${{ github.event.repository.name }}/compose.yaml ]; then cd ${{ github.event.repository.name }} && docker compose down; fi '
+      run: >
+        ssh srv '
+        if [ -f ${{ github.event.repository.name }}/compose.yaml ];
+        then cd ${{ github.event.repository.name }} && docker compose down;
+        fi
+        '
 
     - name: Delete directory on server
-      continue-on-error: true
-      run: ssh srv 'rm -rf ${{ github.event.repository.name }}'
+      run: >
+        ssh srv '
+        [ -d "${{ github.event.repository.name }}" ] && rm -rf "${{ github.event.repository.name }}"
+        '
 
     - name: Deploy files
       run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
+
+    - name: Create .env file
+      run: >
+        ssh srv '
+        echo "DOMAIN_NAME=${{ secrets.DOMAIN_NAME }}" > "${{ github.event.repository.name }}/.env";
+        echo "NTFY_SH_TOPIC=${{ secrets.NTFY_SH_TOPIC }}" >> "${{ github.event.repository.name }}/.env";
+        echo "REDIRECT_URL=${{ secrets.REDIRECT_URL }}" >> "${{ github.event.repository.name }}/.env";
+        '
 
     - name: Remove old Docker image
       run: ssh srv 'docker image rm link-click-notification'
 
     - name: Create Docker network if it does not exist
-      run: ssh srv 'if docker network ls --format "{{.Name}}" | grep -q traefik-network; then echo "Network already exists"; else docker network create traefik-network;fi'
+      run: >
+        ssh srv '
+        if docker network ls --format "{{.Name}}" | grep -q traefik-network;
+        then echo "Network already exists";
+        else docker network create traefik-network;
+        fi
+        '
 
     - name: Always bring up container on server
       if: ${{ always() }}
-      run: ssh srv 'export NTFY_SH_TOPIC=${{ secrets.NTFY_SH_TOPIC }} && export REDIRECT_URL=${{ secrets.REDIRECT_URL }} && cd ${{ github.event.repository.name }} && docker compose up -d'
+      run: >
+        ssh srv '
+        cd ${{ github.event.repository.name }} && docker compose up -d
+        '
